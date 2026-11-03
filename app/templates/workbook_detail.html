@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ source.source_filename }} · {{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Navigasi utama">
+      <a class="brand" href="/">Solog OLI <span>Migration Importer</span></a>
+      <nav>
+        <a href="/">Dashboard</a>
+        <a class="active" href="/workbooks">Workbook</a>
+      </nav>
+      <p class="sidebar-note">Pratinjau read-only</p>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">DETAIL WORKBOOK · READ-ONLY</p>
+          <h1>{{ source.source_filename }}</h1>
+          <p class="subtitle">File ID {{ source.source_file_id }}</p>
+        </div>
+        <a class="button-secondary" href="/workbooks">Kembali ke daftar</a>
+      </header>
+
+      <section class="card metadata-card">
+        <h2>Identitas sumber</h2>
+        <dl class="metadata-grid">
+          <div><dt>Nama sumber</dt><dd>{{ source.source_filename }}</dd></div>
+          <div><dt>Ukuran</dt><dd>{{ source.size_bytes }} bytes</dd></div>
+          <div><dt>SHA-256</dt><dd><code>{{ source.source_sha256 }}</code></dd></div>
+          <div><dt>Status baca</dt><dd>{{ "Siap dibaca" if source.read_status == "readable" else "Gagal dibaca" }}</dd></div>
+        </dl>
+      </section>
+
+      {% if error %}
+      <section class="notice error-notice" role="alert">
+        <strong>Workbook tidak dapat dibaca.</strong>
+        <span>{{ error }}</span>
+      </section>
+      {% endif %}
+
+      {% if workbook %}
+      <section class="card">
+        <h2>Worksheet (urutan workbook)</h2>
+        <ol class="sheet-index">
+          {% for name in workbook.worksheet_names %}
+          <li><a href="#sheet-{{ loop.index }}">{{ name }}</a></li>
+          {% endfor %}
+        </ol>
+      </section>
+
+      {% for sheet in workbook.worksheets %}
+      <section class="card sheet-card" id="sheet-{{ sheet.sheet_index }}">
+        <h2>{{ sheet.sheet_index }}. {{ sheet.name }}</h2>
+        <p>Status: <strong>{{ sheet.status }}</strong> · Dimensi: {{ sheet.dimensions }}
+          ({{ sheet.max_row }} baris × {{ sheet.max_column }} kolom)</p>
+
+        <h3>Preview cell</h3>
+        {% with preview_sheet=sheet, preview_cells=sheet.preview_cells, start_row=1, start_column=1, error=None %}
+          {% include "worksheet_preview.html" %}
+        {% endwith %}
+
+        <h3>Merged ranges ({{ sheet.merged_ranges | length }})</h3>
+        {% if sheet.merged_ranges %}
+        <ul class="merged-list">
+          {% for merged in sheet.merged_ranges %}
+          <li><code>{{ merged.coordinate }}</code> · cell utama <code>{{ merged.main_cell_coordinate }}</code>
+            · anggota: {{ merged.member_coordinates | join(", ") }}</li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="help-text">Tidak ada merged range.</p>
+        {% endif %}
+      </section>
+      {% endfor %}
+      {% endif %}
+    </main>
+  </div>
+</body>
+</html>

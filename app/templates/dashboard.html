@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Navigasi utama">
+      <a class="brand" href="/">Solog OLI <span>Migration Importer</span></a>
+      <nav>
+        <a class="active" href="#dashboard">Dashboard</a>
+        <a href="#workbooks">Workbook</a>
+        <a href="#batches">Migration batch</a>
+        <a href="#validation">Validation report</a>
+      </nav>
+      <p class="sidebar-note">Persiapan migrasi lokal</p>
+    </aside>
+
+    <main class="main-content" id="dashboard">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">WORKSPACE</p>
+          <h1>{{ app_name }}</h1>
+          <p class="subtitle">Persiapan dan peninjauan data migrasi.</p>
+        </div>
+        <div id="app-status" class="status-pill" hx-get="/health/status" hx-trigger="load" hx-swap="outerHTML">
+          <span class="status-dot"></span> Memeriksa status aplikasi…
+        </div>
+      </header>
+
+      <section class="notice" aria-label="Batasan tahap">
+        <strong>Mode persiapan</strong>
+        <span>Belum ada target database atau proses import yang dikonfigurasi.</span>
+      </section>
+
+      <section class="card-grid" aria-label="Area kerja">
+        <article class="card" id="workbooks">
+          <div class="card-icon">01</div>
+          <p class="eyebrow">SUMBER DATA</p>
+          <h2>Workbook</h2>
+          <p>Unggah workbook XLSX dan tinjau struktur sumber secara read-only.</p>
+          <a class="button-primary" href="/workbooks">Buka workbook</a>
+        </article>
+        <article class="card" id="batches">
+          <div class="card-icon">02</div>
+          <p class="eyebrow">PROSES</p>
+          <h2>Migration batch</h2>
+          <p>Belum ada batch yang dibuat. Batch hanya akan disiapkan setelah mapping ditinjau.</p>
+          <span class="empty-state">Belum ada batch</span>
+        </article>
+        <article class="card" id="validation">
+          <div class="card-icon">03</div>
+          <p class="eyebrow">HASIL PEMERIKSAAN</p>
+          <h2>Validation report</h2>
+          <p>Mapping bisnis dan laporan validasi belum tersedia pada tahap ini.</p>
+          <span class="empty-state">Belum ada laporan</span>
+        </article>
+      </section>
+
+      <footer class="page-footer">Solog OLI Migration Importer <span>•</span> {{ "local" }}</footer>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<section class="card workbook-list" id="workbook-list" aria-live="polite">
+  <h2>File yang diunggah</h2>
+
+  {% if results %}
+  <div class="upload-results">
+    {% for result in results %}
+    <p class="upload-result {{ result.status }}">
+      {% if result.status == "accepted" %}
+        <strong>Berhasil dibaca:</strong>
+        <a href="/workbooks/{{ result.workbook.source_file_id }}">{{ result.source_filename }}</a>
+        · SHA-256 <code>{{ result.workbook.source_sha256 }}</code>
+      {% else %}
+        <strong>Ditolak:</strong> {{ result.source_filename or "(nama file tidak tersedia)" }}
+        · {{ result.error }}
+      {% endif %}
+    </p>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if workbooks %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Nama sumber</th>
+          <th>Ukuran</th>
+          <th>SHA-256</th>
+          <th>Status baca</th>
+          <th>Diunggah (UTC)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for workbook in workbooks %}
+        <tr>
+          <td><a href="/workbooks/{{ workbook.source_file_id }}">{{ workbook.source_filename }}</a></td>
+          <td>{{ workbook.size_bytes }} bytes</td>
+          <td><code>{{ workbook.source_sha256 }}</code></td>
+          <td>
+            {% if workbook.read_status == "readable" %}
+              <span class="status-text ready">Siap dibaca</span>
+            {% else %}
+              <span class="status-text error">Gagal dibaca</span>
+              <span>{{ workbook.read_error }}</span>
+            {% endif %}
+          </td>
+          <td>{{ workbook.uploaded_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty-state">Belum ada workbook yang diunggah.</p>
+  {% endif %}
+</section>

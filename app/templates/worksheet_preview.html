@@ -1,0 +1,61 @@
+<section class="sheet-preview" id="sheet-preview-{{ preview_sheet.sheet_index if preview_sheet else source.source_file_id }}">
+  {% if error %}
+  <div class="notice error-notice" role="alert">{{ error }}</div>
+  {% else %}
+  <p class="help-text">
+    Baris {{ start_row }}–{{ [start_row + 19, preview_sheet.max_row] | min }},
+    kolom {{ start_column }}–{{ [start_column + 19, preview_sheet.max_column] | min }}.
+    Cell kosong tetap tersedia pada reader sebagai metadata `is_empty`.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Koordinat</th><th>Baris fisik</th><th>Kolom fisik</th><th>Nilai</th><th>Tipe</th><th>Formula</th><th>Number format</th><th>Style</th></tr>
+      </thead>
+      <tbody>
+        {% for cell in preview_cells %}
+          {% if not cell.is_empty %}
+          <tr>
+            <td>{{ cell.coordinate }}</td>
+            <td>{{ cell.row_number }}</td>
+            <td>{{ cell.column_number }}</td>
+            <td>{{ cell.value }}</td>
+            <td>{{ cell.data_type }}</td>
+            <td><code>{{ cell.formula or cell.formula_metadata or "" }}</code></td>
+            <td>{{ cell.number_format }}</td>
+            <td title="{{ cell.style }}">{{ cell.style.style_id }}</td>
+          </tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <nav class="preview-pagination" aria-label="Navigasi preview cell">
+    {% set endpoint = "/workbooks/" ~ source.source_file_id ~ "/sheets/" ~ preview_sheet.sheet_index ~ "/preview" %}
+    {% if start_row > 1 %}
+    {% set previous_row = [start_row - 20, 1] | max %}
+    <a href="{{ endpoint }}?start_row={{ previous_row }}&amp;start_column={{ start_column }}"
+       hx-get="{{ endpoint }}?start_row={{ previous_row }}&amp;start_column={{ start_column }}"
+       hx-target="#sheet-preview-{{ preview_sheet.sheet_index }}" hx-swap="outerHTML">Baris sebelumnya</a>
+    {% endif %}
+    {% if start_row + 20 <= preview_sheet.max_row %}
+    {% set next_row = start_row + 20 %}
+    <a href="{{ endpoint }}?start_row={{ next_row }}&amp;start_column={{ start_column }}"
+       hx-get="{{ endpoint }}?start_row={{ next_row }}&amp;start_column={{ start_column }}"
+       hx-target="#sheet-preview-{{ preview_sheet.sheet_index }}" hx-swap="outerHTML">Baris berikutnya</a>
+    {% endif %}
+    {% if start_column > 1 %}
+    {% set previous_column = [start_column - 20, 1] | max %}
+    <a href="{{ endpoint }}?start_row={{ start_row }}&amp;start_column={{ previous_column }}"
+       hx-get="{{ endpoint }}?start_row={{ start_row }}&amp;start_column={{ previous_column }}"
+       hx-target="#sheet-preview-{{ preview_sheet.sheet_index }}" hx-swap="outerHTML">Kolom sebelumnya</a>
+    {% endif %}
+    {% if start_column + 20 <= preview_sheet.max_column %}
+    {% set next_column = start_column + 20 %}
+    <a href="{{ endpoint }}?start_row={{ start_row }}&amp;start_column={{ next_column }}"
+       hx-get="{{ endpoint }}?start_row={{ start_row }}&amp;start_column={{ next_column }}"
+       hx-target="#sheet-preview-{{ preview_sheet.sheet_index }}" hx-swap="outerHTML">Kolom berikutnya</a>
+    {% endif %}
+  </nav>
+  {% endif %}
+</section>
