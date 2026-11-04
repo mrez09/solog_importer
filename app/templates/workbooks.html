@@ -37,6 +37,7 @@
         <h2>Unggah workbook</h2>
         <form action="/workbooks/upload" method="post" enctype="multipart/form-data"
               hx-post="/workbooks/upload" hx-target="#workbook-list" hx-swap="outerHTML">
+          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
           <label for="workbook-files">Pilih satu atau beberapa file `.xlsx`</label>
           <input id="workbook-files" type="file" name="files" accept=".xlsx" multiple required>
           <button class="button-primary" type="submit">Unggah dan validasi</button>

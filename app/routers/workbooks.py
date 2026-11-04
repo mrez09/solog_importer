@@ -1,13 +1,25 @@
 from pathlib import Path
-from urllib.parse import urlsplit
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Generic, TypeVar
 from uuid import UUID
 
-from fastapi import APIRouter, File, HTTPException, Path as ApiPath, Query, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    HTTPException,
+    Path as ApiPath,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.models.workbook import UploadBatchResult, UploadResult
+from app.security import require_same_origin_and_csrf
 from app.services.workbook_storage import (
     UploadRejectedError,
     WorkbookStorage,
@@ -17,6 +29,18 @@ from app.services.xlsx_reader import WorkbookReadError
 
 router = APIRouter(prefix="/workbooks", tags=["workbooks"])
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
+RI_CANDIDATES_PER_PAGE = 20
+UNRESOLVED_PER_PAGE = 20
+ANOMALIES_PER_PAGE = 20
+T = TypeVar("T")
+
+
+@dataclass
+class PageSlice(Generic[T]):
+    items: list[T]
+    page: int
+    total_pages: int
+    total_items: int
 
 
 @router.get("", response_class=HTMLResponse, include_in_schema=False)
@@ -42,8 +66,9 @@ async def workbook_list(request: Request) -> HTMLResponse:
 async def upload_workbooks(
     request: Request,
     files: list[UploadFile] = File(...),
+    csrf_token: str = Form(default=""),
 ) -> HTMLResponse:
-    _require_same_origin(request)
+    require_same_origin_and_csrf(request, csrf_token)
     storage = WorkbookStorage()
     results: list[UploadResult] = []
     for upload in files:
@@ -94,22 +119,6 @@ async def upload_workbooks(
         context=context,
         status_code=207 if any(result.status == "rejected" for result in results) else 201,
     )
-
-
-def _require_same_origin(request: Request) -> None:
-    supplied_origin = request.headers.get("origin") or request.headers.get("referer")
-    if not supplied_origin:
-        return
-    supplied = urlsplit(supplied_origin)
-    expected = urlsplit(str(request.base_url))
-    if (
-        supplied.scheme.casefold(),
-        supplied.netloc.casefold(),
-    ) != (
-        expected.scheme.casefold(),
-        expected.netloc.casefold(),
-    ):
-        raise HTTPException(status_code=403, detail="Unggahan lintas-origin ditolak.")
 
 
 @router.get("/{source_file_id}", response_class=HTMLResponse, include_in_schema=False)
@@ -227,4 +236,79 @@ async def worksheet_preview(
             "start_column": start_column,
             "error": None,
         },
+    )
+
+
+@router.get(
+    "/{source_file_id}/ri-candidates",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+async def ri_candidate_preview(
+    request: Request,
+    source_file_id: UUID,
+    sheet_index: int = Query(default=1, ge=1),
+    candidate_page: int = Query(default=1, ge=1),
+    unresolved_page: int = Query(default=1, ge=1),
+    anomaly_page: int = Query(default=1, ge=1),
+) -> HTMLResponse:
+    storage = WorkbookStorage()
+    source_id = source_file_id.hex
+    try:
+        record = storage.get_workbook(source_id)
+        analysis = storage.analyze_ri_layout(record, sheet_index)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Workbook tidak ditemukan.") from exc
+    except WorkbookStorageError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except WorkbookReadError as exc:
+        return templates.TemplateResponse(
+            request=request,
+            name="ri_candidates.html",
+            context={
+                "request": request,
+                "source": record,
+                "analysis": None,
+                "error": str(exc),
+            },
+            status_code=422,
+        )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="ri_candidates.html",
+        context={
+            "request": request,
+            "source": record,
+            "analysis": analysis,
+            "error": None,
+            "candidate_page": candidate_page,
+            "candidate_pages": _page_slice(
+                analysis.candidates, candidate_page, RI_CANDIDATES_PER_PAGE
+            ),
+            "unresolved_page": unresolved_page,
+            "unresolved_pages": _page_slice(
+                analysis.unresolved_rows, unresolved_page, UNRESOLVED_PER_PAGE
+            ),
+            "anomaly_page": anomaly_page,
+            "anomaly_pages": _page_slice(
+                analysis.anomalies, anomaly_page, ANOMALIES_PER_PAGE
+            ),
+        },
+    )
+
+
+def _page_slice(
+    items: Sequence[T],
+    page: int,
+    page_size: int,
+) -> PageSlice[T]:
+    total_pages = max((len(items) + page_size - 1) // page_size, 1)
+    bounded_page = min(page, total_pages)
+    start = (bounded_page - 1) * page_size
+    return PageSlice(
+        items=list(items[start : start + page_size]),
+        page=bounded_page,
+        total_pages=total_pages,
+        total_items=len(items),
     )

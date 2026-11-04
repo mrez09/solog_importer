@@ -16,7 +16,7 @@ from app.config import settings
 from app.main import app
 from app.services.workbook_storage import WorkbookStorage
 
-client = TestClient(app)
+client = TestClient(app, base_url="http://localhost")
 TEST_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 
 
@@ -77,9 +77,18 @@ def upload_part(filename: str, content: bytes) -> tuple[str, tuple[str, bytes, s
 
 
 def upload_one(content: bytes | None = None, filename: str = "source.xlsx"):
+    return post_upload(
+        [upload_part(filename, content or build_workbook())],
+    )
+
+
+def post_upload(files, *, origin: str = "http://localhost"):
+    client.get("/workbooks")
     return client.post(
         "/workbooks/upload",
-        files=[upload_part(filename, content or build_workbook())],
+        files=files,
+        data={"csrf_token": client.cookies.get("solog_csrf", "")},
+        headers={"Origin": origin},
     )
 
 
@@ -98,9 +107,8 @@ def test_upload_accepts_one_workbook_and_lists_readable_metadata() -> None:
 
 
 def test_upload_accepts_multiple_workbooks() -> None:
-    response = client.post(
-        "/workbooks/upload",
-        files=[
+    response = post_upload(
+        [
             upload_part("one.xlsx", build_workbook()),
             upload_part("two.xlsx", build_workbook(include_second_sheet=False)),
         ],
@@ -140,9 +148,8 @@ def test_upload_rejects_file_over_configured_size(monkeypatch: pytest.MonkeyPatc
 
 def test_duplicate_original_filenames_get_unique_internal_names() -> None:
     content = build_workbook()
-    response = client.post(
-        "/workbooks/upload",
-        files=[
+    response = post_upload(
+        [
             upload_part("duplicate.xlsx", content),
             upload_part("duplicate.xlsx", content),
         ],
@@ -168,10 +175,9 @@ def test_original_filename_cannot_control_storage_path() -> None:
 
 
 def test_cross_origin_upload_is_rejected() -> None:
-    response = client.post(
-        "/workbooks/upload",
-        files=[upload_part("source.xlsx", build_workbook())],
-        headers={"Origin": "https://attacker.example"},
+    response = post_upload(
+        [upload_part("source.xlsx", build_workbook())],
+        origin="https://attacker.example",
     )
 
     assert response.status_code == 403
@@ -180,10 +186,9 @@ def test_cross_origin_upload_is_rejected() -> None:
 
 
 def test_same_origin_upload_is_allowed() -> None:
-    response = client.post(
-        "/workbooks/upload",
-        files=[upload_part("source.xlsx", build_workbook())],
-        headers={"Origin": "http://testserver"},
+    response = post_upload(
+        [upload_part("source.xlsx", build_workbook())],
+        origin="http://localhost",
     )
 
     assert response.status_code == 201

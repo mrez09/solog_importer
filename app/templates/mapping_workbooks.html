@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mapping · {{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Navigasi utama">
+      <a class="brand" href="/">Solog OLI <span>Migration Importer</span></a>
+      <nav>
+        <a href="/">Dashboard</a>
+        <a href="/workbooks">Workbook</a>
+        <a class="active" href="/mappings">Mapping &amp; validation</a>
+        <a href="/master-data-mappings">Master data mapping</a>
+      </nav>
+      <p class="sidebar-note">Mapping lokal · target placeholder</p>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">STAGE 4.2.4 · MAPPING ENGINE</p>
+          <h1>Pemetaan kandidat</h1>
+          <p class="subtitle">Pilih workbook GRN/RI untuk meninjau kandidat mapping dan hasil validasi.</p>
+        </div>
+        <a class="button-secondary" href="/workbooks">Daftar workbook</a>
+      </header>
+
+      <section class="notice">
+        <strong>Target belum disahkan</strong>
+        <span>Semua target adalah placeholder lokal. Status awal REVIEW_REQUIRED; tidak ada approval otomatis atau penulisan database.</span>
+      </section>
+
+      <section class="card">
+        <h2>Workbook sumber</h2>
+        {% if workbooks %}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nama sumber</th><th>ID sumber</th><th>SHA-256</th><th>Status</th></tr></thead>
+            <tbody>
+              {% for workbook in workbooks %}
+              <tr>
+                <td>
+                  {% if "GRN" in workbook.source_filename.upper() %}
+                  <a href="/mappings/{{ workbook.source_file_id }}">{{ workbook.source_filename }}</a>
+                  {% else %}{{ workbook.source_filename }}{% endif %}
+                </td>
+                <td><code>{{ workbook.source_file_id }}</code></td>
+                <td><code>{{ workbook.source_sha256 }}</code></td>
+                <td>
+                  {% if "GRN" in workbook.source_filename.upper() %}
+                  Mapping RI tersedia
+                  {% else %}Belum didukung pada Stage 4.2.4{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="empty-state">Belum ada workbook tersimpan.</p>
+        {% endif %}
+      </section>
+    </main>
+  </div>
+</body>
+</html>

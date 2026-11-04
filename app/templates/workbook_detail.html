@@ -36,6 +36,9 @@
           <div><dt>SHA-256</dt><dd><code>{{ source.source_sha256 }}</code></dd></div>
           <div><dt>Status baca</dt><dd>{{ "Siap dibaca" if source.read_status == "readable" else "Gagal dibaca" }}</dd></div>
         </dl>
+        {% if "GRN" in source.source_filename.upper() %}
+        <p><a class="button-primary" href="/workbooks/{{ source.source_file_id }}/ri-candidates">Analisis kandidat RI</a></p>
+        {% endif %}
       </section>
 
       {% if error %}

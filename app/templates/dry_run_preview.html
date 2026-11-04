@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Preview &amp; dry-run · {{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Navigasi utama">
+      <a class="brand" href="/">Solog OLI <span>Migration Importer</span></a>
+      <nav>
+        <a href="/">Dashboard</a>
+        <a href="/workbooks">Workbook</a>
+        <a href="/mappings">Mapping &amp; validation</a>
+        <a href="/master-data-mappings">Master data mapping</a>
+        <a class="active" href="/dry-run">Preview &amp; dry-run</a>
+      </nav>
+      <p class="sidebar-note">Tidak ada koneksi database</p>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">STAGE 4.2.5 · PREVIEW READ-ONLY</p>
+          <h1>Preview &amp; dry-run</h1>
+          {% if source %}
+          <p class="subtitle">{{ source.source_filename }} · ID {{ source.source_file_id }}</p>
+          {% endif %}
+        </div>
+        <a class="button-secondary" href="/dry-run">Kembali ke workbook</a>
+      </header>
+
+      <section class="notice">
+        <strong>Simulasi lokal saja — bukan kesiapan impor</strong>
+        <span>Raw source value dipertahankan. Aturan transformasi hanya ditampilkan, tidak dijalankan; mapping yang belum APPROVED tetap HOLD.</span>
+      </section>
+
+      {% if error %}
+      <section class="notice error-notice" role="alert">
+        <strong>Dry-run tidak dapat dimuat.</strong>
+        <span>{{ error }}</span>
+      </section>
+      {% elif preview %}
+      <section class="card">
+        <h2>Ringkasan simulasi</h2>
+        <p>Workbook: <strong>{{ preview.source_filename }}</strong> · SHA-256 <code>{{ preview.source_sha256 }}</code></p>
+        <dl class="detection-summary">
+          <div><dt>Total source candidates</dt><dd>{{ preview.summary.total_source_candidates }}</dd></div>
+          <div><dt>Total mapping</dt><dd>{{ preview.summary.total_mappings }}</dd></div>
+          <div><dt>Validasi bersih</dt><dd>{{ preview.summary.valid_candidates }}</dd></div>
+          <div><dt>Warning candidates</dt><dd>{{ preview.summary.warning_candidates }}</dd></div>
+          <div><dt>Error candidates</dt><dd>{{ preview.summary.error_candidates }}</dd></div>
+          <div><dt>HOLD candidates</dt><dd>{{ preview.summary.hold_candidates }}</dd></div>
+          <div><dt>Tanpa target mapping</dt><dd>{{ preview.summary.candidates_without_target_mapping }}</dd></div>
+          <div><dt>Target belum lengkap</dt><dd>{{ preview.summary.candidates_with_incomplete_target_mapping }}</dd></div>
+          <div><dt>Mapping tanpa target</dt><dd>{{ preview.summary.mappings_without_target_mapping }}</dd></div>
+          <div><dt>Tanpa approval mapping</dt><dd>{{ preview.summary.candidates_without_approval }}</dd></div>
+          <div><dt>Mapping belum APPROVED</dt><dd>{{ preview.summary.mappings_without_approval }}</dd></div>
+          <div><dt>Error validasi</dt><dd>{{ preview.summary.validation_error_count }}</dd></div>
+          <div><dt>Warning validasi</dt><dd>{{ preview.summary.validation_warning_count }}</dd></div>
+        </dl>
+        <p class="help-text">
+          Status VALID hanya berarti evaluasi lokal sesuai konfigurasi eksplisit. Ini bukan persetujuan target schema atau bukti kandidat siap diimpor.
+          <a href="{{ preview.report_url }}">Buka laporan audit JSON lengkap</a>.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Relasi preview</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Relasi</th><th>Status</th><th>Disposisi</th><th>Dasar / alasan</th></tr></thead>
+            <tbody>
+              {% for relationship in preview.relationships %}
+              <tr>
+                <td>{{ relationship.relationship }}</td>
+                <td><span class="status-text hold">{{ relationship.status }}</span></td>
+                <td>{{ relationship.disposition }}</td>
+                <td>{{ relationship.reason }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="help-text">Relasi PO–RI tidak ditebak dari kemiripan nomor, urutan, atau isi.</p>
+      </section>
+
+      <section class="card">
+        <h2>Kelompok payload mentah per target entity placeholder</h2>
+        {% if preview.entity_groups %}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Entity placeholder</th><th>Record simulasi</th><th>Catatan</th></tr></thead>
+            <tbody>
+              {% for group in preview.entity_groups %}
+              <tr>
+                <td><code>{{ group.target_entity_placeholder }}</code></td>
+                <td>{{ group.records | length }}</td>
+                <td>Field tetap berupa raw source value; record dan baris berulang tidak digabung.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="empty-state">Belum ada target entity placeholder yang dikonfigurasi.</p>
+        {% endif %}
+      </section>
+
+      <section class="card">
+        <h2>Preview kandidat</h2>
+        <form class="dry-run-filter" method="get" action="/dry-run/{{ preview.source_file_id }}">
+          <label for="status-filter">Filter status</label>
+          <select id="status-filter" name="status">
+            {% for status_filter in status_filters %}
+            <option value="{{ status_filter }}" {% if preview.status_filter == status_filter %}selected{% endif %}>{{ status_filter }}</option>
+            {% endfor %}
+          </select>
+          <button class="button-primary" type="submit">Terapkan</button>
+        </form>
+        <p class="help-text">Halaman {{ preview.page }} / {{ preview.total_pages }} · filter {{ preview.status_filter }} · urutan sumber dipertahankan.</p>
+        {% for candidate in preview.candidates %}
+        <article class="candidate-card">
+          <header class="candidate-heading">
+            <h3>{{ candidate.label }} · baris {{ candidate.source_row }}</h3>
+            <span class="status-text {{ 'error' if candidate.status == 'ERROR' else ('hold' if candidate.status == 'HOLD' else 'ready') }}">{{ candidate.status }}</span>
+          </header>
+          <p class="help-text">
+            ID {{ candidate.candidate_id }} · halaman {{ candidate.page_numbers | join(", ") }} · status sumber {{ candidate.source_status }}
+            · {{ candidate.mapping_count }} mapping · {{ candidate.mappings_without_approval }} belum APPROVED
+          </p>
+          {% if candidate.source_hold_reasons %}
+          <p><strong>Alasan HOLD sumber:</strong> {{ candidate.source_hold_reasons | join("; ") }}</p>
+          {% endif %}
+          <details>
+            <summary>Detail field, validasi, dan source locator</summary>
+            {% for mapping in candidate.mappings %}
+            <article class="mapping-card">
+              <h4>{{ mapping.mapping.source_field }} · {{ mapping.mapping.mapping_id }}</h4>
+              <p><strong>Raw source value:</strong> {{ mapping.mapping.source_value if mapping.mapping.source_value is not none else "NULL / kosong" }}</p>
+              <p><strong>Target:</strong> {{ mapping.mapping.target_entity or "UNKNOWN" }}.{{ mapping.mapping.target_field or "UNKNOWN" }}</p>
+              <p><strong>Transformation rule direncanakan:</strong>
+                {% if mapping.transformation_planned %}{{ mapping.transformation_planned }} — tidak dijalankan{% else %}Tidak ada{% endif %}
+              </p>
+              <p><strong>Status mapping:</strong> {{ mapping.mapping.status }} · <strong>Validasi:</strong> {{ mapping.validation.evaluation_status }}</p>
+              <p><strong>Source locator:</strong>
+                {% if mapping.mapping.source_locator %}
+                <a href="/workbooks/{{ mapping.mapping.source_locator.source_file_id }}/sheets/{{ mapping.mapping.source_locator.sheet_index }}/preview?start_row={{ mapping.mapping.source_locator.row_number }}&amp;start_column=1">
+                  {{ mapping.mapping.source_locator.sheet_name }}!{{ mapping.mapping.source_locator.cell_coordinate }} · baris {{ mapping.mapping.source_locator.row_number }}
+                </a>
+                {% else %}UNKNOWN — locator tidak tersedia{% endif %}
+              </p>
+              {% if mapping.validation.issues %}
+              <ul class="validation-issues">
+                {% for issue in mapping.validation.issues %}
+                <li class="{{ 'error' if issue.severity.value == 'ERROR' else 'warning' }}">
+                  <strong>{{ issue.severity.value }} · {{ issue.code }}</strong> — {{ issue.message }}
+                </li>
+                {% endfor %}
+              </ul>
+              {% endif %}
+            </article>
+            {% endfor %}
+          </details>
+          {% if candidate.mappings | selectattr("mapping.target_entity") | list %}
+          <details class="payload-details">
+            <summary>Payload simulasi (raw; transformasi tidak dijalankan)</summary>
+            {% for mapping in candidate.mappings if mapping.mapping.target_entity %}
+            <p>
+              <code>{{ mapping.mapping.target_entity }}.{{ mapping.mapping.target_field or "UNKNOWN" }}</code>
+              ← {{ mapping.mapping.source_value if mapping.mapping.source_value is not none else "NULL / kosong" }}
+              · {{ mapping.mapping.status }} · transformation_executed=false
+            </p>
+            {% endfor %}
+          </details>
+          {% endif %}
+        </article>
+        {% else %}
+        <p class="empty-state">Tidak ada kandidat untuk filter ini.</p>
+        {% endfor %}
+        {% if preview.total_pages > 1 %}
+        <nav class="result-pagination" aria-label="Navigasi halaman kandidat dry-run">
+          {% if preview.page > 1 %}<a href="?page={{ preview.page - 1 }}&amp;status={{ preview.status_filter }}">Sebelumnya</a>{% endif %}
+          <span>{{ preview.page }} / {{ preview.total_pages }}</span>
+          {% if preview.page < preview.total_pages %}<a href="?page={{ preview.page + 1 }}&amp;status={{ preview.status_filter }}">Berikutnya</a>{% endif %}
+        </nav>
+        {% endif %}
+      </section>
+      {% endif %}
+    </main>
+  </div>
+</body>
+</html>

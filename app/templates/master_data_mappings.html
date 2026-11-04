@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Master Data Mapping · {{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Navigasi utama">
+      <a class="brand" href="/">Solog OLI <span>Migration Importer</span></a>
+      <nav>
+        <a href="/">Dashboard</a>
+        <a href="/workbooks">Workbook</a>
+        <a href="/mappings">Mapping &amp; validation</a>
+        <a class="active" href="/master-data-mappings">Master data mapping</a>
+        <a href="/dry-run">Preview &amp; dry-run</a>
+      </nav>
+      <p class="sidebar-note">Kandidat saja · tanpa database</p>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">STAGE 4.4.3 · MASTER DATA</p>
+          <h1>Master data mapping</h1>
+          <p class="subtitle">Bukti atribut master dalam laporan historis; setiap baris tetap ditautkan ke sumber fisiknya.</p>
+        </div>
+        <a class="button-secondary" href="/">Kembali ke dashboard</a>
+      </header>
+
+      <section class="notice">
+        <strong>Bukan mapping final atau izin impor</strong>
+        <span>Target schema otoritatif UNKNOWN. Semua mapping berstatus REVIEW_REQUIRED; tidak ada approval, penggabungan, ID target, transformasi, koneksi database, atau SQL.</span>
+      </section>
+
+      <section class="card">
+        <h2>Ringkasan evidence</h2>
+        <dl class="detection-summary">
+          <div><dt>Workbook yang dianalisis</dt><dd>{{ preview.profile.summary.source_workbook_count }}</dd></div>
+          <div><dt>SHA-256 unik</dt><dd>{{ preview.profile.summary.distinct_workbook_sha256_count }}</dd></div>
+          <div><dt>Observasi kandidat</dt><dd>{{ preview.profile.summary.candidate_count }}</dd></div>
+          <div><dt>Pemasok</dt><dd>{{ preview.profile.summary.supplier_candidate_count }}</dd></div>
+          <div><dt>Barang</dt><dd>{{ preview.profile.summary.item_candidate_count }}</dd></div>
+          <div><dt>Satuan</dt><dd>{{ preview.profile.summary.unit_candidate_count }}</dd></div>
+          <div><dt>Nilai kosong</dt><dd>{{ preview.profile.summary.missing_value_count }}</dd></div>
+          <div><dt>Nilai berulang</dt><dd>{{ preview.profile.summary.duplicate_candidate_count }}</dd></div>
+          <div><dt>Potensi konflik kode/nama</dt><dd>{{ preview.profile.summary.conflicting_natural_key_count }}</dd></div>
+          <div><dt>Target schema</dt><dd>{{ preview.profile.summary.target_schema_status }}</dd></div>
+          <div><dt>Relasi</dt><dd>{{ preview.profile.relationship_status }}</dd></div>
+        </dl>
+        <p class="help-text">SHA yang sama tidak menghapus identitas unggahan; setiap unggahan dan locator tetap ditampilkan terpisah.</p>
+      </section>
+
+      <section class="card">
+        <h2>Workbook sumber</h2>
+        {% if preview.profile.source_workbooks %}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nama / identitas upload</th><th>Sheet</th><th>SHA-256</th><th>Observasi</th></tr></thead>
+            <tbody>
+              {% for source in preview.profile.source_workbooks %}
+              <tr>
+                <td>{{ source.source_filename }}<br><code>{{ source.source_file_id }}</code></td>
+                <td>{{ source.worksheet_name }}</td>
+                <td><code>{{ source.source_sha256 }}</code></td>
+                <td>{{ source.master_observation_count }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="empty-state">Tidak ditemukan workbook PR/GRN yang didukung pada unggahan lokal.</p>
+        {% endif %}
+      </section>
+
+      <section class="card">
+        <h2>Kandidat mapping dan crosswalk</h2>
+        <form class="dry-run-filter" method="get" action="/master-data-mappings">
+          <label for="entity-filter">Entitas</label>
+          <select id="entity-filter" name="entity">
+            {% for entity_option in entities %}
+            <option value="{{ entity_option }}" {% if preview.entity_filter == entity_option %}selected{% endif %}>{{ entity_option }}</option>
+            {% endfor %}
+          </select>
+          <label for="status-filter">Status mapping</label>
+          <select id="status-filter" name="status">
+            <option value="ALL" {% if preview.status_filter == "ALL" %}selected{% endif %}>ALL</option>
+            {% for status_option in statuses %}
+            <option value="{{ status_option }}" {% if preview.status_filter == status_option %}selected{% endif %}>{{ status_option }}</option>
+            {% endfor %}
+          </select>
+          <button class="button-primary" type="submit">Terapkan filter</button>
+        </form>
+
+        <p class="help-text">Menampilkan {{ preview.candidates|length }} dari {{ preview.total_filtered }} observasi · halaman {{ preview.page }} / {{ preview.total_pages }}.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Entitas / status</th><th>Sumber dan nilai raw</th><th>Kandidat target</th>
+                <th>Key / kualitas</th><th>Evidence dan locator</th><th>Crosswalk</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for candidate in preview.candidates %}
+              <tr>
+                <td>
+                  <strong>{{ candidate.source_entity }}</strong><br>
+                  <code>{{ candidate.mapping_id }}</code><br>
+                  <span class="status-text">{{ candidate.mapping_status.value }}</span><br>
+                  Confidence mapping: {{ candidate.confidence }}<br>
+                  Confidence sumber: {{ candidate.source_evidence_confidence }}
+                </td>
+                <td>
+                  {{ candidate.source_header }} · {{ candidate.source_data_type }}<br>
+                  <strong>{{ candidate.source_value if candidate.source_value is not none else "NULL / kosong" }}</strong><br>
+                  <span class="help-text">{{ candidate.source_filename }}</span>
+                </td>
+                <td>
+                  {% if candidate.candidate_target_table %}
+                  <code>{{ candidate.candidate_target_table }}.{{ candidate.candidate_target_column }}</code>
+                  {% else %}UNKNOWN{% endif %}
+                  <br><span class="help-text">{{ candidate.target_evidence }} — {{ candidate.target_evidence_note }}</span>
+                </td>
+                <td>
+                  {{ candidate.natural_key_proposal }}<br>
+                  Duplikat: {{ candidate.duplicate_frequency }} occurrence{% if candidate.conflicting_natural_key %}<br><span class="status-text hold">Konflik kode/nama</span>{% endif %}
+                  {% if candidate.missing_value %}<br><span class="status-text hold">Nilai kosong; tahan untuk review</span>{% endif %}
+                </td>
+                <td>
+                  {{ candidate.transformation_proposal }}<br>
+                  NULL: {{ candidate.null_handling_proposal }}<br>
+                  Duplikat: {{ candidate.duplicate_handling_proposal }}<br>
+                  {% for evidence_item in candidate.evidence %}<span class="help-text">{{ evidence_item }}</span><br>{% endfor %}
+                  {% for risk in candidate.risks %}<span class="status-text hold">{{ risk }}</span><br>{% endfor %}
+                  <a class="locator-link" href="/workbooks/{{ candidate.source_file_id }}/sheets/{{ candidate.source_sheet_index }}/preview?start_row={{ candidate.source_locator.row_number }}&amp;start_column=1">
+                    {{ candidate.source_sheet }}!{{ candidate.source_locator.cell_coordinate }} · baris {{ candidate.source_locator.row_number }}
+                  </a>
+                </td>
+                <td>
+                  <code>{{ candidate.source_sha256 }}</code><br>
+                  Fingerprint: <code>{{ candidate.source_fingerprint }}</code><br>
+                  Target ID: {{ candidate.candidate_target_id or "UNKNOWN / tidak dibuat" }}<br>
+                  Status: {{ candidate.mapping_status.value }}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="6" class="empty-state">Tidak ada kandidat sesuai filter.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if preview.total_pages > 1 %}
+        <nav class="result-pagination" aria-label="Halaman kandidat master">
+          {% if preview.page > 1 %}
+          <a href="?page={{ preview.page - 1 }}&amp;entity={{ preview.entity_filter }}&amp;status={{ preview.status_filter }}">Sebelumnya</a>
+          {% endif %}
+          <span>{{ preview.page }} / {{ preview.total_pages }}</span>
+          {% if preview.page < preview.total_pages %}
+          <a href="?page={{ preview.page + 1 }}&amp;entity={{ preview.entity_filter }}&amp;status={{ preview.status_filter }}">Berikutnya</a>
+          {% endif %}
+        </nav>
+        {% endif %}
+      </section>
+    </main>
+  </div>
+</body>
+</html>

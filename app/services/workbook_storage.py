@@ -12,6 +12,8 @@ from pydantic import ValidationError
 
 from app.config import DATA_DIR, PROJECT_ROOT, settings
 from app.models.workbook import WorkbookRecord, WorksheetPage
+from app.models.ri_candidate import RIAnalysisResult
+from app.services.ri_layout import detect_ri_layout
 from app.services.xlsx_reader import (
     WorkbookDetail,
     WorkbookReadError,
@@ -170,6 +172,14 @@ class WorkbookStorage:
             start_row,
             start_column,
         )
+
+    def analyze_ri_layout(
+        self,
+        record: WorkbookRecord,
+        sheet_index: int = 1,
+    ) -> RIAnalysisResult:
+        source_path = self._verified_source_path(record)
+        return detect_ri_layout(source_path, record, sheet_index)
 
     def update_read_error(self, source_file_id: str, message: str) -> WorkbookRecord:
         record = self.get_workbook(source_file_id)

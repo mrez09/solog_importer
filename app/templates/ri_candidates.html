@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kandidat RI · {{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Navigasi utama">
+      <a class="brand" href="/">Solog OLI <span>Migration Importer</span></a>
+      <nav>
+        <a href="/">Dashboard</a>
+        <a class="active" href="/workbooks">Workbook</a>
+      </nav>
+      <p class="sidebar-note">Kandidat · read-only · belum disetujui</p>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">LAYOUT DETECTOR · STATUS REVIEW REQUIRED</p>
+          <h1>Kandidat ekstraksi RI</h1>
+          <p class="subtitle">{{ source.source_filename }} · ID sumber {{ source.source_file_id }}</p>
+        </div>
+        <a class="button-secondary" href="/workbooks/{{ source.source_file_id }}">Kembali ke workbook</a>
+      </header>
+
+      <section class="notice">
+        <strong>Analisis kandidat saja</strong>
+        <span>Tidak ada mapping final, pengisian nilai, penggabungan dokumen, atau penulisan ke database.</span>
+      </section>
+
+      {% if error %}
+      <section class="notice error-notice" role="alert">
+        <strong>Layout tidak dapat dianalisis.</strong>
+        <span>{{ error }}</span>
+      </section>
+      {% elif analysis %}
+      <section class="card">
+        <h2>Ringkasan deteksi</h2>
+        <p>Status: <span class="status-text hold">{{ analysis.status }}</span> · Sheet {{ analysis.worksheet.sheet_index }}:
+          <strong>{{ analysis.worksheet.name }}</strong> · {{ analysis.worksheet.dimensions }}</p>
+        <dl class="detection-summary">
+          <div><dt>Halaman terdeteksi</dt><dd>{{ analysis.summary.page_count }}</dd></div>
+          <div><dt>Kandidat dokumen</dt><dd>{{ analysis.summary.candidate_document_count }}</dd></div>
+          <div><dt>Baris detail kandidat</dt><dd>{{ analysis.summary.candidate_detail_count }}</dd></div>
+          <div><dt>Detail tertaut ke RI</dt><dd>{{ analysis.summary.attached_detail_count }}</dd></div>
+          <div><dt>Baris unresolved</dt><dd>{{ analysis.summary.unresolved_row_count }}</dd></div>
+          <div><dt>Anomali HOLD</dt><dd>{{ analysis.summary.anomaly_count }}</dd></div>
+          <div><dt>Dokumen HOLD</dt><dd>{{ analysis.summary.hold_document_count }}</dd></div>
+          <div><dt>Halaman tanpa header</dt><dd>{{ analysis.summary.pages_without_document_header }}</dd></div>
+          <div><dt>Merged ranges</dt><dd>{{ analysis.worksheet.merged_ranges_count }}</dd></div>
+        </dl>
+        <p class="help-text">SHA-256: <code>{{ analysis.source_sha256 }}</code>. Nilai kosong dan duplikasi tetap ditampilkan apa adanya.</p>
+      </section>
+
+      <section class="card">
+        <h2>Metadata halaman</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Halaman</th><th>Baris fisik</th><th>Header RI</th><th>Header tabel</th><th>Detail</th><th>Unresolved</th><th>Status</th></tr></thead>
+            <tbody>
+              {% for page in analysis.pages %}
+              <tr>
+                <td>{{ page.page_number }}</td>
+                <td>{{ page.start_row }}–{{ page.end_row }}</td>
+                <td>{{ page.document_header_count }}</td>
+                <td>{{ page.repeated_table_header_count }}</td>
+                <td>{{ page.detail_candidate_count }}</td>
+                <td>{{ page.unresolved_row_count }}</td>
+                <td><span class="status-text {{ 'hold' if page.status == 'HOLD' else 'ready' }}">{{ page.status }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Kandidat dokumen RI</h2>
+        <p class="help-text">Halaman {{ candidate_pages.page }} dari {{ candidate_pages.total_pages }} · {{ candidate_pages.total_items }} kandidat. Nomor yang berulang tetap menjadi kandidat terpisah.</p>
+        {% for candidate in candidate_pages.items %}
+        <article class="candidate-card" id="candidate-{{ candidate.candidate_index }}">
+          <header class="candidate-heading">
+            <h3>Kandidat {{ candidate.candidate_index }} · baris {{ candidate.header_row }}–{{ candidate.end_row }}</h3>
+            <span class="status-text {{ 'hold' if candidate.status == 'HOLD' else 'ready' }}">{{ candidate.status }}</span>
+          </header>
+          <p class="help-text">Halaman {{ candidate.page_numbers | join(", ") }} · confidence {{ candidate.confidence }}
+            {% if candidate.anomaly_codes %}· HOLD: {{ candidate.anomaly_codes | join(", ") }}{% endif %}</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Field header</th><th>Nilai mentah</th><th>Nilai normalisasi teknis</th><th>Status</th><th>Source locator</th></tr></thead>
+              <tbody>
+                {% for name, value in [("Nomor RI", candidate.header.document_number), ("Tanggal", candidate.header.date), ("Pemasok", candidate.header.supplier)] %}
+                <tr>
+                  <td>{{ name }}</td>
+                  <td>{{ value.raw_value if value.raw_value is not none else "NULL / tidak ditemukan" }}</td>
+                  <td>{{ value.normalized_value if value.normalized_value is not none else "NULL / unresolved" }}</td>
+                  <td>{{ value.status }}</td>
+                  <td>
+                    {% if value.source_locator %}
+                    <a href="/workbooks/{{ value.source_locator.source_file_id }}/sheets/{{ value.source_locator.sheet_index }}/preview?start_row={{ value.source_locator.row_number }}&amp;start_column=1">
+                      {{ value.source_locator.sheet_name }}!{{ value.source_locator.cell_coordinate }} · baris {{ value.source_locator.row_number }}
+                    </a>
+                    {% else %}Tidak ada cell bernilai yang terkonfirmasi{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <h4>Detail barang ({{ candidate.details | length }})</h4>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Baris</th><th>Kode barang</th><th>Nama barang</th><th>Kuantitas</th><th>Satuan</th><th>Status / alasan HOLD</th></tr></thead>
+              <tbody>
+                {% for detail in candidate.details %}
+                <tr>
+                  <td><a href="/workbooks/{{ source.source_file_id }}/sheets/{{ analysis.worksheet.sheet_index }}/preview?start_row={{ detail.row_number }}&amp;start_column=1">{{ detail.row_number }}</a></td>
+                  {% for value in [detail.item_code, detail.item_name, detail.quantity, detail.unit] %}
+                  <td>
+                    Raw: {% if value.raw_value is not none %}{{ value.raw_value }}{% else %}NULL / kosong{% endif %}
+                    <br>Teknis: {% if value.normalized_value is not none %}{{ value.normalized_value }}{% else %}NULL / unresolved{% endif %}
+                    {% if value.source_locator %}
+                    <br><a class="locator-link" href="/workbooks/{{ source.source_file_id }}/sheets/{{ value.source_locator.sheet_index }}/preview?start_row={{ value.source_locator.row_number }}&amp;start_column=1">{{ value.source_locator.cell_coordinate }}</a>
+                    {% endif %}
+                  </td>
+                  {% endfor %}
+                  <td><span class="status-text {{ 'hold' if detail.status == 'HOLD' else 'ready' }}">{{ detail.status }}</span>
+                    {% if detail.anomaly_codes %}<br>{{ detail.anomaly_codes | join(", ") }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          {% if candidate.detection_evidence %}
+          <details class="evidence-details">
+            <summary>Bukti deteksi ({{ candidate.detection_evidence | length }})</summary>
+            <ul>
+              {% for item in candidate.detection_evidence %}
+              <li>{{ item.description }}:
+                {% if item.locator %}
+                <a href="/workbooks/{{ source.source_file_id }}/sheets/{{ item.locator.sheet_index }}/preview?start_row={{ item.locator.row_number }}&amp;start_column=1">{{ item.locator.cell_coordinate }}</a>
+                {% endif %}
+                · nilai {{ item.observed_value if item.observed_value is not none else "kosong" }}
+                · style {{ item.style_id if item.style_id is not none else "n/a" }}
+                · merge {{ item.merged_range or "tidak ada" }}
+                {% if item.position_matched is not none %}· posisi {{ "sesuai" if item.position_matched else "berbeda" }}{% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+          </details>
+          {% endif %}
+        </article>
+        {% else %}
+        <p class="empty-state">Tidak ada header kandidat RI yang terdeteksi.</p>
+        {% endfor %}
+        {% if candidate_pages.total_pages > 1 %}
+        <nav class="result-pagination" aria-label="Halaman kandidat dokumen">
+          {% if candidate_pages.page > 1 %}<a href="?candidate_page={{ candidate_pages.page - 1 }}&amp;unresolved_page={{ unresolved_pages.page }}&amp;anomaly_page={{ anomaly_pages.page }}">Sebelumnya</a>{% endif %}
+          <span>{{ candidate_pages.page }} / {{ candidate_pages.total_pages }}</span>
+          {% if candidate_pages.page < candidate_pages.total_pages %}<a href="?candidate_page={{ candidate_pages.page + 1 }}&amp;unresolved_page={{ unresolved_pages.page }}&amp;anomaly_page={{ anomaly_pages.page }}">Berikutnya</a>{% endif %}
+        </nav>
+        {% endif %}
+      </section>
+
+      <section class="card">
+        <h2>Baris unresolved / HOLD</h2>
+        <p class="help-text">Halaman {{ unresolved_pages.page }} dari {{ unresolved_pages.total_pages }} · {{ unresolved_pages.total_items }} baris.</p>
+        {% for row in unresolved_pages.items %}
+        <article class="unresolved-row">
+          <strong>Baris {{ row.row_number }} · halaman {{ row.page_number }} · {{ row.reason_code }}</strong>
+          <p>{{ row.reason }}</p>
+          <ul>
+            {% for name, value in row.fields.items() %}
+            <li>{{ name }}: {{ value.raw_value if value.raw_value is not none else "NULL / kosong" }}
+              {% if value.source_locator %}
+              · <a href="/workbooks/{{ source.source_file_id }}/sheets/{{ value.source_locator.sheet_index }}/preview?start_row={{ value.source_locator.row_number }}&amp;start_column=1">{{ value.source_locator.cell_coordinate }}</a>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </article>
+        {% else %}
+        <p class="empty-state">Tidak ada baris unresolved.</p>
+        {% endfor %}
+        {% if unresolved_pages.total_pages > 1 %}
+        <nav class="result-pagination" aria-label="Halaman baris unresolved">
+          {% if unresolved_pages.page > 1 %}<a href="?candidate_page={{ candidate_pages.page }}&amp;unresolved_page={{ unresolved_pages.page - 1 }}&amp;anomaly_page={{ anomaly_pages.page }}">Sebelumnya</a>{% endif %}
+          <span>{{ unresolved_pages.page }} / {{ unresolved_pages.total_pages }}</span>
+          {% if unresolved_pages.page < unresolved_pages.total_pages %}<a href="?candidate_page={{ candidate_pages.page }}&amp;unresolved_page={{ unresolved_pages.page + 1 }}&amp;anomaly_page={{ anomaly_pages.page }}">Berikutnya</a>{% endif %}
+        </nav>
+        {% endif %}
+      </section>
+
+      <section class="card">
+        <h2>Anomali dan alasan HOLD</h2>
+        <h3>Ringkasan kategori</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Kategori</th><th>Jumlah</th><th>Status</th></tr></thead>
+            <tbody>
+              {% for code, count in analysis.anomaly_counts.items() %}
+              <tr><td>{{ code }}</td><td>{{ count }}</td><td><span class="status-text hold">HOLD</span></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="help-text">Halaman {{ anomaly_pages.page }} dari {{ anomaly_pages.total_pages }} · {{ anomaly_pages.total_items }} anomali.</p>
+        {% for anomaly in anomaly_pages.items %}
+        <article class="anomaly-row">
+          <strong>{{ anomaly.title }} · {{ anomaly.code }}</strong>
+          <p>{{ anomaly.reason }}</p>
+          {% if anomaly.candidate_index %}<a href="?candidate_page={{ ((anomaly.candidate_index - 1) // 20) + 1 }}&amp;unresolved_page={{ unresolved_pages.page }}&amp;anomaly_page={{ anomaly_pages.page }}#candidate-{{ anomaly.candidate_index }}">Kandidat {{ anomaly.candidate_index }}</a>{% endif %}
+          {% if anomaly.source_locators %}
+          <ul>
+            {% for locator in anomaly.source_locators %}
+            <li><a href="/workbooks/{{ source.source_file_id }}/sheets/{{ locator.sheet_index }}/preview?start_row={{ locator.row_number }}&amp;start_column=1">{{ locator.sheet_name }}!{{ locator.cell_coordinate }} · baris {{ locator.row_number }}</a></li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+        </article>
+        {% else %}
+        <p class="empty-state">Tidak ada anomali yang dicatat.</p>
+        {% endfor %}
+        {% if anomaly_pages.total_pages > 1 %}
+        <nav class="result-pagination" aria-label="Halaman anomali">
+          {% if anomaly_pages.page > 1 %}<a href="?candidate_page={{ candidate_pages.page }}&amp;unresolved_page={{ unresolved_pages.page }}&amp;anomaly_page={{ anomaly_pages.page - 1 }}">Sebelumnya</a>{% endif %}
+          <span>{{ anomaly_pages.page }} / {{ anomaly_pages.total_pages }}</span>
+          {% if anomaly_pages.page < anomaly_pages.total_pages %}<a href="?candidate_page={{ candidate_pages.page }}&amp;unresolved_page={{ unresolved_pages.page }}&amp;anomaly_page={{ anomaly_pages.page + 1 }}">Berikutnya</a>{% endif %}
+        </nav>
+        {% endif %}
+      </section>
+      {% endif %}
+    </main>
+  </div>
+</body>
+</html>

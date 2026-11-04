@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Target database · {{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Navigasi utama">
+      <a class="brand" href="/">Solog OLI <span>Migration Importer</span></a>
+      <nav>
+        <a href="/">Dashboard</a>
+        <a href="/workbooks">Workbook</a>
+        <a href="/mappings">Mapping &amp; validation</a>
+        <a href="/dry-run">Preview &amp; dry-run</a>
+        <a class="active" href="/target-databases">Target database</a>
+        <a href="/target-databases/verify">Koneksi &amp; schema</a>
+      </nav>
+      <p class="sidebar-note">Konfigurasi lokal · tanpa koneksi</p>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">STAGE 4.4.1 · KONFIGURASI TARGET</p>
+          <h1>Target database</h1>
+          <p class="subtitle">Kelola profil TARGET secara independen dari database referensi.</p>
+        </div>
+        <a class="button-secondary" href="/">Kembali ke dashboard</a>
+      </header>
+
+      <section class="notice error-notice" aria-label="Batas keselamatan database">
+        <strong>Database referensi bukan target</strong>
+        <span><code>db_solog_oli_initial</code> dilindungi dan tidak dapat dipilih. Halaman ini tidak menguji koneksi, menjalankan SQL, atau membuat database.</span>
+      </section>
+
+      {% if error %}
+      <section class="notice error-notice" role="alert">
+        <strong>Konfigurasi tidak disimpan</strong>
+        <span>{{ error }}</span>
+      </section>
+      {% endif %}
+
+      <section class="card selected-target-card" aria-labelledby="selected-target-heading">
+        <p class="eyebrow">TARGET TERPILIH</p>
+        <h2 id="selected-target-heading">Identitas sebelum koneksi</h2>
+        {% if selected_profile %}
+        <dl class="metadata-grid">
+          <div><dt>Nama profil</dt><dd>{{ selected_profile.name }}</dd></div>
+          <div><dt>Environment</dt><dd>{{ selected_profile.environment.value }}</dd></div>
+          <div><dt>Host</dt><dd><code>{{ selected_profile.host }}</code></dd></div>
+          <div><dt>Port</dt><dd>{{ selected_profile.port }}</dd></div>
+          <div><dt>Database</dt><dd><code>{{ selected_profile.database }}</code></dd></div>
+          <div><dt>Username</dt><dd>{{ selected_profile.username }}</dd></div>
+          <div><dt>Purpose</dt><dd><strong>{{ selected_profile.purpose }}</strong></dd></div>
+        </dl>
+        <p class="help-text">Identitas ini hanya konfigurasi. Belum ada koneksi atau pemeriksaan schema.</p>
+        <a class="button-primary" href="/target-databases/verify">Buka koneksi &amp; schema</a>
+        {% else %}
+        <p class="empty-state">Belum ada target yang dipilih. Profil baru tidak dipilih otomatis.</p>
+        {% endif %}
+      </section>
+
+      <section class="card target-profile-form">
+        <h2>Buat profil target</h2>
+        <form action="/target-databases/create" method="post">
+          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+          <div class="target-form-grid">
+            <label>Nama profil
+              <input name="name" type="text" maxlength="80" required autocomplete="off">
+            </label>
+            <label>Environment
+              <select name="environment" required>
+                <option value="">Pilih environment</option>
+                {% for environment in environments %}
+                <option value="{{ environment.value }}">{{ environment.value }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>Host
+              <input name="host" type="text" maxlength="253" required autocomplete="off">
+            </label>
+            <label>Port
+              <input name="port" type="number" min="1" max="65535" step="1" required>
+            </label>
+            <label>Nama database
+              <input name="database" type="text" maxlength="64" required autocomplete="off">
+            </label>
+            <label>Username
+              <input name="username" type="text" maxlength="128" required autocomplete="off">
+            </label>
+            <label class="target-form-wide">Password (opsional; tidak disimpan)
+              <input name="password" type="password" autocomplete="new-password">
+            </label>
+          </div>
+          <p class="help-text">Password yang dikirim di form ini tidak dipertahankan. Untuk environment Production, verifikasi berikutnya juga meminta konfirmasi identitas teks yang persis.</p>
+          <button class="button-primary" type="submit">Simpan metadata profil</button>
+        </form>
+      </section>
+
+      <section class="card target-profile-list">
+        <h2>Profil tersimpan</h2>
+        {% if configuration.profiles %}
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Nama profil</th><th>Environment</th><th>Identitas TARGET</th><th>Status pilihan</th><th>Aksi</th></tr>
+            </thead>
+            <tbody>
+              {% for item in configuration.profiles %}
+              <tr>
+                <td><a href="/target-databases/{{ item.profile_id }}">{{ item.name }}</a></td>
+                <td>{{ item.environment.value }}</td>
+                <td><code>{{ item.host }}:{{ item.port }}/{{ item.database }}</code><br><span class="help-text">Purpose: {{ item.purpose }}</span></td>
+                <td>{% if item.profile_id == configuration.selected_profile_id %}<strong>TARGET terpilih</strong>{% else %}Tidak dipilih{% endif %}</td>
+                <td>
+                  <a class="button-secondary" href="/target-databases/{{ item.profile_id }}">Edit</a>
+                  {% if item.profile_id != configuration.selected_profile_id %}
+                  <form action="/target-databases/{{ item.profile_id }}/select" method="post" class="inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                    <button class="button-secondary" type="submit">Pilih</button>
+                  </form>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="empty-state">Belum ada profil target tersimpan.</p>
+        {% endif %}
+      </section>
+
+      {% if profile %}
+      <section class="card target-profile-detail">
+        <p class="eyebrow">DETAIL PROFIL · TARGET</p>
+        <h2>Edit pengaturan nonrahasia</h2>
+        <dl class="metadata-grid">
+          <div><dt>Nama profil</dt><dd>{{ profile.name }}</dd></div>
+          <div><dt>Purpose</dt><dd>{{ profile.purpose }}</dd></div>
+          <div><dt>Identitas database</dt><dd><code>{{ profile.host }}:{{ profile.port }}/{{ profile.database }}</code></dd></div>
+        </dl>
+        <form action="/target-databases/{{ profile.profile_id }}/update" method="post">
+          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+          <div class="target-form-grid">
+            <label>Nama profil
+              <input name="name" type="text" value="{{ profile.name }}" maxlength="80" required autocomplete="off">
+            </label>
+            <label>Environment
+              <select name="environment" required>
+                {% for environment in environments %}
+                <option value="{{ environment.value }}"{% if environment == profile.environment %} selected{% endif %}>{{ environment.value }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>Host
+              <input name="host" type="text" value="{{ profile.host }}" maxlength="253" required autocomplete="off">
+            </label>
+            <label>Port
+              <input name="port" type="number" value="{{ profile.port }}" min="1" max="65535" step="1" required>
+            </label>
+            <label>Nama database
+              <input name="database" type="text" value="{{ profile.database }}" maxlength="64" required autocomplete="off">
+            </label>
+            <label>Username
+              <input name="username" type="text" value="{{ profile.username }}" maxlength="128" required autocomplete="off">
+            </label>
+            <label class="target-form-wide">Password baru (opsional; tidak disimpan)
+              <input name="password" type="password" autocomplete="new-password">
+            </label>
+          </div>
+          <p class="help-text">Password tidak dapat ditampilkan atau disimpan. Masukkan ulang pada halaman Koneksi &amp; schema jika akan melakukan verifikasi.</p>
+          <button class="button-primary" type="submit">Simpan perubahan nonrahasia</button>
+        </form>
+      </section>
+
+      <section class="card target-delete-card">
+        <h2>Hapus profil</h2>
+        <p>Penghapusan profil terpilih juga menghapus status pilihan; target lain tidak akan dipilih otomatis.</p>
+        <form action="/target-databases/{{ profile.profile_id }}/delete" method="post">
+          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+          <label class="confirmation-check">
+            <input type="checkbox" name="confirm_delete" value="yes" required>
+            Saya memahami bahwa metadata profil <strong>{{ profile.name }}</strong> akan dihapus.
+          </label>
+          <button class="button-danger" type="submit">Hapus profil</button>
+        </form>
+      </section>
+      {% endif %}
+    </main>
+  </div>
+</body>
+</html>

@@ -14,8 +14,11 @@
       <nav>
         <a class="active" href="#dashboard">Dashboard</a>
         <a href="#workbooks">Workbook</a>
+        <a href="/mappings">Mapping &amp; validation</a>
+        <a href="/master-data-mappings">Master data mapping</a>
+        <a href="/dry-run">Preview &amp; dry-run</a>
+        <a href="/target-databases">Target database</a>
         <a href="#batches">Migration batch</a>
-        <a href="#validation">Validation report</a>
       </nav>
       <p class="sidebar-note">Persiapan migrasi lokal</p>
     </aside>
@@ -34,7 +37,7 @@
 
       <section class="notice" aria-label="Batasan tahap">
         <strong>Mode persiapan</strong>
-        <span>Belum ada target database atau proses import yang dikonfigurasi.</span>
+        <span>Profil target hanya menyimpan metadata nonrahasia. Verifikasi koneksi memerlukan pemilihan eksplisit, password ulang, dan konfirmasi; proses import belum tersedia.</span>
       </section>
 
       <section class="card-grid" aria-label="Area kerja">
@@ -46,18 +49,47 @@
           <a class="button-primary" href="/workbooks">Buka workbook</a>
         </article>
         <article class="card" id="batches">
-          <div class="card-icon">02</div>
+          <div class="card-icon">03</div>
           <p class="eyebrow">PROSES</p>
           <h2>Migration batch</h2>
           <p>Belum ada batch yang dibuat. Batch hanya akan disiapkan setelah mapping ditinjau.</p>
           <span class="empty-state">Belum ada batch</span>
         </article>
         <article class="card" id="validation">
-          <div class="card-icon">03</div>
+          <div class="card-icon">04</div>
           <p class="eyebrow">HASIL PEMERIKSAAN</p>
           <h2>Validation report</h2>
           <p>Mapping bisnis dan laporan validasi belum tersedia pada tahap ini.</p>
           <span class="empty-state">Belum ada laporan</span>
+        </article>
+        <article class="card" id="mapping">
+          <div class="card-icon">02</div>
+          <p class="eyebrow">REVIEW MAPPING</p>
+          <h2>Mapping &amp; validation</h2>
+          <p>Tinjau kandidat field RI, target placeholder, catatan transformasi, dan hasil validasi.</p>
+          <a class="button-primary" href="/mappings">Buka mapping</a>
+        </article>
+        <article class="card" id="dry-run">
+          <div class="card-icon">05</div>
+          <p class="eyebrow">SIMULASI READ-ONLY</p>
+          <h2>Preview &amp; dry-run</h2>
+          <p>Kelompokkan kandidat RI dan tinjau validasi serta proyeksi payload raw tanpa database atau eksekusi transformasi.</p>
+          <a class="button-primary" href="/dry-run">Buka dry-run</a>
+        </article>
+        <article class="card" id="master-data-mappings">
+          <div class="card-icon">07</div>
+          <p class="eyebrow">KANDIDAT MASTER DATA</p>
+          <h2>Master data mapping</h2>
+          <p>Tinjau atribut pemasok, barang, dan satuan dengan evidence serta locator; target tetap belum disetujui.</p>
+          <a class="button-primary" href="/master-data-mappings">Buka kandidat master</a>
+        </article>
+        <article class="card" id="target-databases">
+          <div class="card-icon">06</div>
+          <p class="eyebrow">KONFIGURASI TERPISAH</p>
+          <h2>Target database</h2>
+          <p>Kelola profil TARGET terpisah dan lakukan verifikasi koneksi/schema hanya setelah profil dipilih, password dimasukkan ulang, dan identitas dikonfirmasi.</p>
+          <a class="button-primary" href="/target-databases">Kelola profil target</a>
+          <a class="button-secondary" href="/target-databases/verify">Koneksi &amp; schema</a>
         </article>
       </section>
 

@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Koneksi &amp; schema · {{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Navigasi utama">
+      <a class="brand" href="/">Solog OLI <span>Migration Importer</span></a>
+      <nav>
+        <a href="/">Dashboard</a>
+        <a href="/workbooks">Workbook</a>
+        <a href="/mappings">Mapping &amp; validation</a>
+        <a href="/dry-run">Preview &amp; dry-run</a>
+        <a href="/target-databases">Target database</a>
+        <a class="active" href="/target-databases/verify">Koneksi &amp; schema</a>
+      </nav>
+      <p class="sidebar-note">Metadata read-only · target eksplisit</p>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">STAGE 4.4.2 · VERIFIKASI TARGET</p>
+          <h1>Koneksi &amp; schema</h1>
+          <p class="subtitle">Verifikasi identitas, hak akses, dan metadata schema target terpilih.</p>
+        </div>
+        <a class="button-secondary" href="/target-databases">Kelola profil</a>
+      </header>
+
+      <section class="notice error-notice" aria-label="Batas keselamatan">
+        <strong>Tidak ada impor pada tahap ini</strong>
+        <span><code>db_solog_oli_initial</code> adalah database referensi dan selalu ditolak. Pemeriksaan memerlukan konfirmasi dan hak akses SELECT terbatas. Password wajib untuk Development, Staging, Production, dan Other; profil Local boleh menggunakan password kosong. Tidak ada query data transaksi, perubahan schema, atau Import Executor.</span>
+      </section>
+
+      {% if error %}
+      <section class="notice error-notice" role="alert">
+        <strong>Verifikasi tidak dijalankan atau diblokir</strong>
+        <span>{{ error }}</span>
+      </section>
+      {% endif %}
+
+      {% if selected_profile %}
+      <section class="card selected-target-card" aria-labelledby="selected-profile-heading">
+        <p class="eyebrow">TARGET YANG DIPILIH SECARA EKSPLISIT</p>
+        <h2 id="selected-profile-heading">Identitas sebelum koneksi</h2>
+        <dl class="metadata-grid">
+          <div><dt>Nama profil</dt><dd>{{ selected_profile.name }}</dd></div>
+          <div><dt>Environment</dt><dd>{{ selected_profile.environment.value }}</dd></div>
+          <div><dt>Host</dt><dd><code>{{ selected_profile.host }}</code></dd></div>
+          <div><dt>Port</dt><dd>{{ selected_profile.port }}</dd></div>
+          <div><dt>Database</dt><dd><code>{{ selected_profile.database }}</code></dd></div>
+          <div><dt>Username</dt><dd>{{ selected_profile.username }}</dd></div>
+          <div><dt>Purpose</dt><dd><strong>{{ selected_profile.purpose }}</strong></dd></div>
+        </dl>
+        <p class="help-text">Password tidak ada di profil dan hanya digunakan selama request verifikasi. Masukkan ulang untuk setiap pemeriksaan; hanya environment Local yang boleh menggunakan password kosong. Formulir terikat ke snapshot profil dan kedaluwarsa setelah 10 menit.</p>
+      </section>
+
+      <section class="card target-profile-form">
+        <h2>Konfirmasi koneksi read-only</h2>
+        <form action="/target-databases/{{ selected_profile.profile_id }}/verify" method="post">
+          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+          <input type="hidden" name="verification_token" value="{{ verification_token }}">
+          <div class="target-form-grid">
+            <label class="target-form-wide">Password database{% if password_required %} (wajib){% else %} (opsional untuk Local){% endif %}
+              <input name="password" type="password"{% if password_required %} required{% endif %} autocomplete="off">
+            </label>
+            {% if production_confirmation_phrase %}
+            <label class="target-form-wide">Konfirmasi khusus Production
+              <span class="help-text">Ketik persis: <code>{{ production_confirmation_phrase }}</code></span>
+              <input name="production_confirmation" type="text" required autocomplete="off">
+            </label>
+            {% endif %}
+          </div>
+          <label class="confirmation-check">
+            <input type="checkbox" name="confirm_target" value="yes" required>
+            Saya telah meninjau identitas lengkap di atas, mengonfirmasi target yang dimaksud, dan berwenang meminta pemeriksaan metadata read-only.
+          </label>
+          <p class="help-text">Koneksi diblokir jika identitas tidak cocok, hak akses tidak dapat diverifikasi, atau terdapat hak selain SELECT pada database target.</p>
+          <button class="button-primary" type="submit">Verifikasi identitas &amp; schema</button>
+          {% if selected_profile.environment.value == "Local" and selected_profile.host == "127.0.0.1" and selected_profile.port == 3306 and selected_profile.database == "solog_importer_1" and selected_profile.username == "devro" %}
+          <button class="button-secondary" type="submit" name="action" value="export_schema_snapshot">Verifikasi dan ekspor metadata</button>
+          <p class="help-text">Ekspor hanya membaca INFORMATION_SCHEMA setelah identitas server dan SHOW GRANTS diverifikasi. JSON dan SHA-256 disimpan di direktori data lokal yang diabaikan Git.</p>
+          {% endif %}
+        </form>
+      </section>
+      {% else %}
+      <section class="card">
+        <h2>Belum ada target terpilih</h2>
+        <p class="empty-state">Pilih profil secara eksplisit di halaman pengelolaan. Tidak ada profil yang dipilih otomatis dan koneksi belum dicoba.</p>
+        <a class="button-primary" href="/target-databases">Tinjau dan pilih profil target</a>
+      </section>
+      {% endif %}
+
+      {% if snapshot_export %}
+      <section class="card" aria-labelledby="snapshot-export-heading">
+        <p class="eyebrow">METADATA SNAPSHOT</p>
+        <h2 id="snapshot-export-heading">{{ snapshot_export.collection_status }}</h2>
+        <p>Snapshot schema selesai dikumpulkan dengan status identitas dan privilege terverifikasi.</p>
+        <dl class="metadata-grid">
+          <div><dt>File</dt><dd><code>{{ snapshot_export.path }}</code></dd></div>
+          <div><dt>SHA-256</dt><dd><code>{{ snapshot_export.sha256 }}</code></dd></div>
+          <div><dt>Base tables</dt><dd>{{ snapshot_export.summary.base_tables }}</dd></div>
+          <div><dt>Views</dt><dd>{{ snapshot_export.summary.views }}</dd></div>
+          <div><dt>Kolom</dt><dd>{{ snapshot_export.summary.columns_total }}</dd></div>
+          <div><dt>Primary keys</dt><dd>{{ snapshot_export.summary.primary_key_constraints }}</dd></div>
+          <div><dt>Foreign keys</dt><dd>{{ snapshot_export.summary.foreign_key_constraints }}</dd></div>
+          <div><dt>Unique indexes selain PRIMARY</dt><dd>{{ snapshot_export.summary.unique_indexes_excluding_primary }}</dd></div>
+        </dl>
+        {% if snapshot_export.metadata_gaps %}
+        <h3>Metadata yang belum tersedia</h3>
+        <ul>{% for gap in snapshot_export.metadata_gaps %}<li>{{ gap.component }}: {{ gap.reason }}</li>{% endfor %}</ul>
+        {% endif %}
+        <p class="help-text">Snapshot bukan persetujuan baseline, mapping, atau impor. Tidak ada data bisnis yang dikumpulkan.</p>
+      </section>
+      {% endif %}
+
+      {% if configuration.profiles %}
+      <section class="card target-profile-list">
+        <h2>Profil tersedia</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Nama profil</th><th>Environment</th><th>Endpoint/database</th><th>Purpose</th><th>Pilihan</th></tr>
+            </thead>
+            <tbody>
+              {% for profile in configuration.profiles %}
+              <tr>
+                <td>{{ profile.name }}</td>
+                <td>{{ profile.environment.value }}</td>
+                <td><code>{{ profile.host }}:{{ profile.port }}/{{ profile.database }}</code></td>
+                <td>{{ profile.purpose }}</td>
+                <td>{% if profile.profile_id == configuration.selected_profile_id %}<strong>Terpilih</strong>{% else %}Tidak dipilih{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% endif %}
+
+      {% if result %}
+      <section class="card" aria-labelledby="verification-result-heading">
+        <p class="eyebrow">HASIL VERIFIKASI · {{ result.verified_at }}</p>
+        <h2 id="verification-result-heading">{{ result.status }}</h2>
+        <p>{{ result.message }}</p>
+        <dl class="metadata-grid">
+          <div><dt>Status</dt><dd>{{ result.statuses | join(", ") }}</dd></div>
+          <div><dt>Hak akses</dt><dd>{{ result.privileges_status }}{% if result.write_privileges_detected %} · hak tulis/privilege tambahan terdeteksi{% endif %}</dd></div>
+          {% if result.error_category %}<div><dt>Kategori error</dt><dd>{{ result.error_category }}</dd></div>{% endif %}
+          {% if result.identity %}
+          <div><dt>Versi engine</dt><dd>{{ result.identity.engine_version }}</dd></div>
+          <div><dt>Hostname server</dt><dd>{{ result.identity.server_hostname }}</dd></div>
+          <div><dt>Port server</dt><dd>{{ result.identity.server_port }}</dd></div>
+          <div><dt>Database aktif</dt><dd>{{ result.identity.database }}</dd></div>
+          <div><dt>Account autentikasi</dt><dd>{{ result.identity.authenticated_user }}</dd></div>
+          <div><dt>Account efektif</dt><dd>{{ result.identity.effective_user }}</dd></div>
+          {% endif %}
+        </dl>
+
+        {% if result.schema_metadata %}
+        <h3>Ringkasan metadata schema</h3>
+        <dl class="metadata-grid">
+          <div><dt>Base tables</dt><dd>{{ result.schema_metadata.base_table_count }}</dd></div>
+          <div><dt>Views</dt><dd>{{ result.schema_metadata.view_count }}</dd></div>
+          <div><dt>Kolom</dt><dd>{{ result.schema_metadata.column_count }}</dd></div>
+          <div><dt>Primary keys</dt><dd>{{ result.schema_metadata.primary_key_count }}</dd></div>
+          <div><dt>Foreign keys</dt><dd>{{ result.schema_metadata.foreign_key_count }}</dd></div>
+          <div><dt>Unique indexes</dt><dd>{{ result.schema_metadata.unique_index_count }}</dd></div>
+          <div><dt>Tabel auto-increment</dt><dd>{{ result.schema_metadata.auto_increment_table_count }}</dd></div>
+          <div><dt>Baseline schema</dt><dd>SCHEMA_BASELINE_UNAVAILABLE</dd></div>
+          <div><dt>Review schema</dt><dd>SCHEMA_REVIEW_REQUIRED</dd></div>
+        </dl>
+
+        <details class="payload-details">
+          <summary>Definisi kolom ({{ result.schema_metadata.columns | length }})</summary>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Tabel</th><th>Kolom</th><th>Tipe</th><th>Nullable</th><th>Extra</th></tr></thead>
+              <tbody>
+                {% for column in result.schema_metadata.columns %}
+                <tr><td>{{ column.table }}</td><td>{{ column.column }}</td><td>{{ column.column_type }}</td><td>{{ column.nullable }}</td><td>{{ column.extra }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </details>
+        <details class="payload-details">
+          <summary>Primary key ({{ result.schema_metadata.primary_keys | length }})</summary>
+          <ul>{% for key in result.schema_metadata.primary_keys %}<li><code>{{ key.table }}</code>: {{ key.columns | join(", ") }}</li>{% endfor %}</ul>
+        </details>
+        <details class="payload-details">
+          <summary>Foreign key ({{ result.schema_metadata.foreign_keys | length }})</summary>
+          <ul>{% for key in result.schema_metadata.foreign_keys %}<li><code>{{ key.table }}.{{ key.columns | join(", ") }}</code> → <code>{{ key.referenced_table }}.{{ key.referenced_columns | join(", ") }}</code> ({{ key.constraint }})</li>{% endfor %}</ul>
+        </details>
+        <details class="payload-details">
+          <summary>Unique index ({{ result.schema_metadata.unique_indexes | length }})</summary>
+          <ul>{% for index in result.schema_metadata.unique_indexes %}<li><code>{{ index.table }}</code> / {{ index.index }}: {{ index.columns | join(", ") }}</li>{% endfor %}</ul>
+        </details>
+        <details class="payload-details">
+          <summary>Tabel dengan auto-increment ({{ result.schema_metadata.auto_increment_tables | length }})</summary>
+          <ul>{% for table in result.schema_metadata.auto_increment_tables %}<li><code>{{ table }}</code></li>{% endfor %}</ul>
+        </details>
+        {% endif %}
+        <p class="help-text">Hasil hanya disimpan sementara di memori proses dan terikat pada snapshot profil. Hasil hilang saat proses aplikasi dimulai ulang atau setelah 30 menit. Tidak ada baseline target yang disetujui; metadata bukan bukti kompatibilitas atau kesiapan impor.</p>
+      </section>
+      {% endif %}
+    </main>
+  </div>
+</body>
+</html>

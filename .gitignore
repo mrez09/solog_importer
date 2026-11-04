@@ -9,7 +9,9 @@ htmlcov/
 .env
 .env.*
 !.env.example
-reports/
+!reports/
+reports/*
+!reports/stage-4-4-1-target-database-configuration.md
 state/
 data/
 *.log

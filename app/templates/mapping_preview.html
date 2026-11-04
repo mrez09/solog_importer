@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mapping Kandidat · {{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Navigasi utama">
+      <a class="brand" href="/">Solog OLI <span>Migration Importer</span></a>
+      <nav>
+        <a href="/">Dashboard</a>
+        <a href="/workbooks">Workbook</a>
+        <a class="active" href="/mappings">Mapping &amp; validation</a>
+      </nav>
+      <p class="sidebar-note">Tidak ada koneksi database</p>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">STAGE 4.2.4 · PREVIEW READ-ONLY SUMBER</p>
+          <h1>Mapping &amp; validation</h1>
+          {% if source %}
+          <p class="subtitle">{{ source.source_filename }} · ID {{ source.source_file_id }}</p>
+          {% endif %}
+        </div>
+        <a class="button-secondary" href="/mappings">Kembali ke workbook</a>
+      </header>
+
+      <section class="notice">
+        <strong>Target kandidat saja</strong>
+        <span>Validasi tidak mengubah status mapping, transformasi hanya ditampilkan, dan nilai sumber tidak ditulis atau dinormalisasi.</span>
+      </section>
+
+      {% if error %}
+      <section class="notice error-notice" role="alert">
+        <strong>Mapping tidak dapat dimuat.</strong>
+        <span>{{ error }}</span>
+      </section>
+      {% elif preview %}
+      <section class="card">
+        <h2>Validation report</h2>
+        <p>Status sumber: <span class="status-text hold">REVIEW_REQUIRED</span> · SHA-256 <code>{{ preview.source_sha256 }}</code></p>
+        <dl class="detection-summary">
+          <div><dt>Total mapped candidates</dt><dd>{{ preview.report.total_mapped_candidates }}</dd></div>
+          <div><dt>Approved</dt><dd>{{ preview.report.approved_mappings }}</dd></div>
+          <div><dt>Draft</dt><dd>{{ preview.report.draft_mappings }}</dd></div>
+          <div><dt>Review required</dt><dd>{{ preview.report.review_required }}</dd></div>
+          <div><dt>Rejected</dt><dd>{{ preview.report.rejected }}</dd></div>
+          <div><dt>HOLD</dt><dd>{{ preview.report.hold }}</dd></div>
+          <div><dt>Validation HOLD</dt><dd>{{ preview.report.validation_hold_candidates }}</dd></div>
+          <div><dt>Validation errors</dt><dd>{{ preview.report.error_count }}</dd></div>
+          <div><dt>Warnings</dt><dd>{{ preview.report.warning_count }}</dd></div>
+        </dl>
+        {% if preview.report.error_counts or preview.report.warning_counts %}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Severity</th><th>Validation code</th><th>Count</th></tr></thead>
+            <tbody>
+              {% for code, count in preview.report.error_counts.items() %}
+              <tr><td>ERROR</td><td><code>{{ code }}</code></td><td>{{ count }}</td></tr>
+              {% endfor %}
+              {% for code, count in preview.report.warning_counts.items() %}
+              <tr><td>WARNING</td><td><code>{{ code }}</code></td><td>{{ count }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+        <p class="help-text">Daftar berikut dipaginasi ({{ preview.page }} / {{ preview.total_pages }}). Blank dan field target yang belum ditetapkan tetap ditahan sebagai belum terselesaikan.</p>
+      </section>
+
+      <section class="card">
+        <h2>Kandidat mapping</h2>
+        {% for row in preview.rows %}
+        <article class="mapping-card" id="mapping-{{ row.mapping.mapping_id }}">
+          <header class="candidate-heading">
+            <h3>{{ row.mapping.source_field }} · {{ row.mapping.mapping_id }}</h3>
+            <span class="status-text {{ 'hold' if row.mapping.status in ('HOLD', 'REJECTED') else 'ready' }}">{{ row.mapping.status }}</span>
+          </header>
+          <div class="mapping-source">
+            <p><strong>Nilai sumber:</strong> {{ row.mapping.source_value if row.mapping.source_value is not none else "NULL / kosong" }} <span class="help-text">({{ row.mapping.source_data_type }})</span></p>
+            <p><strong>Target field kandidat:</strong> {{ row.target_candidate or "UNKNOWN / belum dikonfigurasi" }}</p>
+            <p><strong>Transformasi:</strong> {{ row.transformation_preview }}</p>
+            <p><strong>Status validasi:</strong> <span class="status-text {{ 'hold' if row.validation.evaluation_status in ('HOLD', 'REJECTED') else 'ready' }}">{{ row.validation.evaluation_status }}</span></p>
+            <p><strong>Source locator:</strong>
+              {% if row.mapping.source_locator %}
+              <a href="/workbooks/{{ row.mapping.source_locator.source_file_id }}/sheets/{{ row.mapping.source_locator.sheet_index }}/preview?start_row={{ row.mapping.source_locator.row_number }}&amp;start_column=1">
+                {{ row.mapping.source_locator.sheet_name }}!{{ row.mapping.source_locator.cell_coordinate }} · baris {{ row.mapping.source_locator.row_number }}
+              </a>
+              {% else %}UNKNOWN — tidak ada cell sumber yang terkonfirmasi{% endif %}
+            </p>
+          </div>
+
+          {% if row.validation.issues %}
+          <ul class="validation-issues">
+            {% for issue in row.validation.issues %}
+            <li class="{{ 'error' if issue.severity.value == 'ERROR' else 'warning' }}">
+              <strong>{{ issue.severity.value }} · {{ issue.code }}</strong> — {{ issue.message }}
+            </li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+
+          <details class="mapping-edit">
+            <summary>Tinjau definisi mapping</summary>
+            <form method="post" action="/mappings/{{ preview.source_file_id }}/{{ row.mapping.mapping_id }}">
+              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+              <input type="hidden" name="page" value="{{ preview.page }}">
+              <div class="mapping-form-grid">
+                <label>Target entity placeholder
+                  <input name="target_entity" maxlength="120" value="{{ row.mapping.target_entity or '' }}" placeholder="UNKNOWN_ENTITY">
+                </label>
+                <label>Target field placeholder
+                  <input name="target_field" maxlength="120" value="{{ row.mapping.target_field or '' }}" placeholder="UNKNOWN_FIELD">
+                </label>
+                <label>Tipe target (opsional)
+                  <select name="target_data_type">
+                    <option value="">Belum diketahui</option>
+                    {% for target_type in target_types %}
+                    <option value="{{ target_type.value }}" {% if row.mapping.target_data_type == target_type.value %}selected{% endif %}>{{ target_type.value }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label>Required
+                  <select name="target_required">
+                    <option value="unknown" {% if row.mapping.target_required is none %}selected{% endif %}>Belum diketahui</option>
+                    <option value="yes" {% if row.mapping.target_required is sameas true %}selected{% endif %}>Ya</option>
+                    <option value="no" {% if row.mapping.target_required is sameas false %}selected{% endif %}>Tidak</option>
+                  </select>
+                </label>
+                <label>Status mapping
+                  <select name="status">
+                    {% for mapping_status in mapping_statuses %}
+                    <option value="{{ mapping_status.value }}" {% if row.mapping.status == mapping_status.value %}selected{% endif %}>{{ mapping_status.value }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label>Transformation rule (deskriptif; tidak dijalankan)
+                  <input name="transformation_rule" maxlength="500" value="{{ row.mapping.transformation_rule or '' }}" placeholder="Aturan perlu direview">
+                </label>
+                <label class="mapping-wide">Daftar referensi valid (satu nilai per baris, opsional)
+                  <textarea name="allowed_references" rows="3">{% for reference in row.mapping.allowed_references %}{{ reference }}{% if not loop.last %}
+{% endif %}{% endfor %}</textarea>
+                </label>
+                <label class="mapping-wide">Catatan review
+                  <textarea name="review_notes" maxlength="2000" rows="3">{{ row.mapping.review_notes or '' }}</textarea>
+                </label>
+              </div>
+              <p class="help-text">Status APPROVED hanya dapat dipilih eksplisit dan memerlukan catatan; sistem tidak menyetujui mapping secara otomatis.</p>
+              <button class="button-primary" type="submit">Simpan definisi lokal</button>
+            </form>
+          </details>
+        </article>
+        {% else %}
+        <p class="empty-state">Tidak ada kandidat mapping sumber.</p>
+        {% endfor %}
+        {% if preview.total_pages > 1 %}
+        <nav class="result-pagination" aria-label="Halaman kandidat mapping">
+          {% if preview.page > 1 %}<a href="?page={{ preview.page - 1 }}">Sebelumnya</a>{% endif %}
+          <span>{{ preview.page }} / {{ preview.total_pages }}</span>
+          {% if preview.page < preview.total_pages %}<a href="?page={{ preview.page + 1 }}">Berikutnya</a>{% endif %}
+        </nav>
+        {% endif %}
+      </section>
+      {% endif %}
+    </main>
+  </div>
+</body>
+</html>
